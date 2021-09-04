@@ -1,0 +1,169 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  tasks:
+
+# Install JAVA
+  - name: Install Java packages
+    apt:
+      name: "{{ item }}"
+      state: latest
+    with_items:
+    - default-jre
+    - default-jdk
+
+  # Create Kafka Group
+  - name: Create Kafka Group
+    group:
+      name: kafka
+      state: present
+
+  - name: Allow 'kafka' group to have passwordless sudo
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      regexp: '^%kafka'
+      line: '%kafka ALL=(ALL:ALL) NOPASSWD: ALL'
+      validate: visudo -cf %s
+
+  - name: Add sudoers users to kafka group
+    user:
+      name: kafka
+      groups: sudo
+      append: yes
+
+  # Create Kafka User
+  - name: Add the user 'kafka' 
+    user:
+      name: kafka
+      state: present
+      comment: kafka
+      groups: sudo, kafka
+      shell: /bin/bash
+      append: yes
+      createhome: yes
+
+  - name: Download Kafka Binaries
+    get_url:
+      url: https://downloads.apache.org/kafka/2.6.2/kafka_2.13-2.6.2.tgz
+      dest: /home/kafka/kafka.tgz
+      owner: kafka
+      group: kafka
+      mode: '0755'
+
+  - name: Create a directory if it does not exist
+    file:
+      path: /home/kafka/kafka
+      state: directory
+      mode: '0755'
+      owner: kafka
+      group: kafka
+
+  - name: Extract kafka files
+    unarchive:
+      src: /home/kafka/kafka.tgz
+      dest: /home/kafka/kafka
+      extra_opts:
+      - --strip-components=1
+      owner: kafka
+      group: kafka
+
+# Configure Kafka
+  - name: Config kafka properties file
+    lineinfile:
+      path: /home/kafka/kafka/config/server.properties
+      line: "{{ item }}"
+      create: yes
+    with_items:
+    - delete.topic.enable = true
+    - log.dirs=/home/kafka/logs
+    - advertised.listeners=PLAINTEXT://172.16.16.150:9092
+    - listeners=PLAINTEXT://0.0.0.0:9092
+
+# Configure hosts file
+  # - name: host files
+  #   lineinfile:
+  #     path: /etc/hosts
+  #     line: '::1         ip6-localhost ip6-localhost.localdomain localhost6 localhost6.localdomain6'
+  #     create: yes
+
+
+  - name: host files
+    lineinfile:
+      path: /etc/hosts
+      line: "{{ item }}"
+      create: yes
+    with_items:
+    - 172.16.16.100   kmaster.example.com     kmaster
+    - 172.16.16.101   kworker1.example.com    kworker1
+    - 172.16.16.102   kworker2.example.com    kworker2
+    - 172.16.16.150   kafka.example.com       kafka
+    - ::1         ip6-localhost ip6-localhost.localdomain localhost6 localhost6.localdomain6
+
+# Creating Systemd Unit Files and Starting the Kafka Server
+  - name: Zookeeper service config
+    copy:
+      dest: "/etc/systemd/system/zookeeper.service"
+      content: | 
+                  [Unit]
+                  Requires=network.target remote-fs.target
+                  After=network.target remote-fs.target
+
+                  [Service]
+                  Type=simple
+                  User=kafka
+                  ExecStart=/home/kafka/kafka/bin/zookeeper-server-start.sh /home/kafka/kafka/config/zookeeper.properties
+                  ExecStop=/home/kafka/kafka/bin/zookeeper-server-stop.sh
+                  Restart=on-abnormal
+
+                  [Install]
+                  WantedBy=multi-user.target
+
+
+  - name: Kafka service config
+    copy:
+      dest: "/etc/systemd/system/kafka.service"
+      content: | 
+                  [Unit]
+                  Requires=zookeeper.service
+                  After=zookeeper.service
+
+                  [Service]
+                  Type=simple
+                  User=kafka
+                  ExecStart=/bin/sh -c '/home/kafka/kafka/bin/kafka-server-start.sh /home/kafka/kafka/config/server.properties > /home/kafka/kafka/kafka.log 2>&1'
+                  ExecStop=/home/kafka/kafka/bin/kafka-server-stop.sh
+                  Restart=on-abnormal
+
+                  [Install]
+                  WantedBy=multi-user.target
+
+
+# Start and Enable services
+  - name: Reload systemd config
+    systemd:
+      daemon_reload: yes
+
+  - name: zookeeper service
+    service:
+      name: zookeeper
+      state: started
+      enabled: yes
+
+  - name: kafka service
+    service:
+      name: kafka
+      state: started
+      enabled: yes
+
+  - name: Pause for 1 minute to allow the service to start
+    pause:
+      minutes: 1
+
+# Create Kafka Topics
+  - name: Create Topics
+    command: "{{ item }}"
+    with_items:
+    - /home/kafka/kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic input
+    - /home/kafka/kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic output

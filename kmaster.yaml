@@ -1,0 +1,186 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+#####  Conmon packages  #######  
+# Disable Swapp
+  - name: Remove swapfile from /etc/fstab
+    mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+
+  - name: Disable swap
+    command: swapoff -a
+
+
+  - name: Disable UFW
+    ufw:
+      state: disabled
+
+  - name: add kernel params to containerd 
+    lineinfile:
+      path: /etc/modules-load.d/containerd.conf
+      line: "{{ item }}"
+      create: yes
+    with_items:
+    - overlay
+    - br_netfilter
+
+# Add kernel settings 
+  - name:  Enable and Load Kernel modules
+    modprobe:
+      name: "{{ item }}"
+      state: present
+    with_items:
+    - br_netfilter
+    - overlay
+
+# Add sysctl settings 
+  - name: update kernel settings
+    sysctl:
+        name: "{{ item }}"
+        value: 1
+        sysctl_set: yes
+        state: present
+        reload: yes
+    with_items:
+      - 'net.bridge.bridge-nf-call-iptables'
+      - 'net.bridge.bridge-nf-call-ip6tables'
+      - 'net.ipv4.ip_forward'
+
+# Install containerd runtime
+  # - name: Update system
+  #   apt:
+  #     name: "*"
+  #     state: latest
+
+  - name: Install Containerd packages
+    apt:
+      name: "{{ item }}"
+      state: latest
+    with_items:
+    - apt-transport-https
+    - ca-certificates
+    - containerd
+
+  - name: Create a directory if it does not exist
+    file:
+      path: /etc/containerd
+      state: directory
+      mode: '0755'
+
+  - name: containerd config default to file
+    lineinfile:
+      path: /etc/containerd/config.toml
+      line: containerd config default
+      create: yes
+
+  - name: Containerd service
+    service:
+      name: containerd
+      state: started
+      enabled: yes
+
+  - name: Download gpg key for Kube repo
+    get_url:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+      mode: '0755'
+
+  - name: Create kubectl repo
+    copy:
+      dest: "/etc/apt/sources.list.d/kubernetes.list"
+      content: | 
+                deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main
+
+  - name: Install Kubernetes packages
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+    with_items:
+    - kubeadm=1.22.0-00
+    - kubelet=1.22.0-00
+    - kubectl=1.22.0-00
+
+# Enable ssh password authentication
+  - name: Enable ssh password authentication
+    command: "{{ item }}"
+    with_items:
+    - sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    - echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+    - echo -e "kubeadmin\nkubeadmin" | passwd root >/dev/null 2>&1
+    - echo "export TERM=xterm" >> /etc/bash.bashrc
+
+  - name: sshd service
+    service:
+      name: sshd
+      state: reloaded
+      enabled: yes
+
+  - name: host files
+    lineinfile:
+      path: /etc/hosts
+      line: "{{ item }}"
+      create: yes
+    with_items:
+    - 172.16.16.100   kmaster.example.com     kmaster
+    - 172.16.16.101   kworker1.example.com    kworker1
+    - 172.16.16.102   kworker2.example.com    kworker2
+    - 172.16.16.150   kafka.example.com       kafka
+
+
+########  Kube Master packages  ########
+########  Initialize the Kubernetes cluster using kubeadm  ########
+  - name: Initialize the Kubernetes cluster using kubeadm
+    command: kubeadm init --apiserver-advertise-address=172.16.16.100 --pod-network-cidr=192.168.0.0/16
+
+  - name: bashrc kube config
+    lineinfile:
+      path: /home/vagrant/.bashrc
+      line: "{{ item }}"
+      create: yes
+    with_items:
+      - export KUBECONFIG=/home/vagrant/.kube/config
+
+  - name: Setup kubeconfig for vagrant user
+    command: "{{ item }}"
+    with_items:
+      - mkdir -p /home/vagrant/.kube
+      - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+      - chown -R vagrant:vagrant /home/vagrant/.kube
+
+  - name: Deploy Calico CNI
+    become: false
+    command: kubectl create -f https://docs.projectcalico.org/v3.18/manifests/calico.yaml
+
+  - name: Generate join command
+    command: kubeadm token create --print-join-command
+    register: join_command
+
+  - name: Copy join command to local file
+    local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+
+# Clone and deploy kubernetes apps
+  - name: Clone github repository
+    git:
+      repo: https://github.com/jonandez/apps.git
+      dest: /home/vagrant/apps/
+      clone: yes
+      update: yes
+
+  - name: Setup kubeconfig for vagrant user
+    command: "{{ item }}"
+    with_items:
+    - chmod +x /home/vagrant/apps/kafka_apps/bootstrap.sh 
+    - chmod +x /home/vagrant/apps/monitoring/bootstrap.sh
+
+  - name: Provision Monitoring apps
+    shell: /home/vagrant/apps/kafka_apps/bootstrap.sh 
+
+  - name: Provision Kafka apps
+    shell: /home/vagrant/apps/kafka_apps/bootstrap.sh 
