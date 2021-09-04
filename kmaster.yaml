@@ -176,11 +176,16 @@
   - name: Setup kubeconfig for vagrant user
     command: "{{ item }}"
     with_items:
+    - chown -R vagrant:vagrant /home/vagrant/apps/
     - chmod +x /home/vagrant/apps/kafka_apps/bootstrap.sh 
     - chmod +x /home/vagrant/apps/monitoring/bootstrap.sh
 
   - name: Provision Monitoring apps
-    shell: /home/vagrant/apps/kafka_apps/bootstrap.sh 
+    become: yes
+    become_user: vagrant
+    shell: cd /home/vagrant/apps/kafka_apps/ && ./bootstrap.sh 
 
   - name: Provision Kafka apps
-    shell: /home/vagrant/apps/kafka_apps/bootstrap.sh 
+    become: yes
+    become_user: vagrant
+    shell: cd /home/vagrant/apps/monitoring/ && ./bootstrap.sh 
