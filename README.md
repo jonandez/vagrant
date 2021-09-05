@@ -9,6 +9,7 @@ git clone https://github.com/jonandez/vagrant.git
 Run Vagrantfile script
 
 ```
+cd vagrant
 vagrant up
 ```
 
@@ -29,7 +30,7 @@ sudo su - kafka
 ```
 
 #### List Topics:
-~/kafka/bin/kafka-topics.sh.sh --bootstrap-server=localhost:9092 --list
+~/kafka/bin/kafka-topics.sh --bootstrap-server=localhost:9092 --list
 
 #### Watch topics messages
 ~/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic input --from-beginning
