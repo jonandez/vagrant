@@ -21,8 +21,15 @@ vagrant ssh kworker1
 ```
 
 ### Check Kafka Topics
+Login to kafka server as kafka user
+```
+vagrant ssh kafka
+sudo su - kafka
+
+```
+
 #### List Topics:
---bootstrap-server=localhost:9092 --list
+~/kafka/bin/kafka-topics.sh.sh --bootstrap-server=localhost:9092 --list
 
 #### Watch topics messages
 ~/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic input --from-beginning
@@ -34,13 +41,15 @@ vagrant ssh kworker1
 
 #### Grafana Dashboard
 172.16.16.101:32000
-User: admin
-Password: admin
+
+- User: admin
+- Password: admin
+
 
 Import Kuberntes Dashboard
-Go to left menu and select + and Import
-Import using Grafana input code: 8588
-Select Prometheus and click Import
+- Go to left menu and select + and Import
+- Import using Grafana input code: 8588
+- Select Prometheus as source and click Import
 
 ### Decode message
 Connect to kmaster server
