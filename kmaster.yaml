@@ -67,6 +67,7 @@
     - apt-transport-https
     - ca-certificates
     - containerd
+    - python3-pip
 
   - name: Create a directory if it does not exist
     file:
@@ -179,6 +180,7 @@
     - chown -R vagrant:vagrant /home/vagrant/apps/
     - chmod +x /home/vagrant/apps/kafka_apps/bootstrap.sh 
     - chmod +x /home/vagrant/apps/monitoring/bootstrap.sh
+    - pip install kafka-python
 
   - name: Provision Monitoring apps
     become: yes
