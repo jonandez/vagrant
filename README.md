@@ -61,6 +61,6 @@ vagrant ssh kmaster
 
 Execute app.py
 ```
-sudo python3 /home/vagrant/app/kafka_apps/decode/decode.py
+sudo python3 /home/vagrant/apps/kafka_apps/decode/decode.py
 
 ```
