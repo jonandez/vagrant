@@ -3,21 +3,21 @@ Vagrant.configure(2) do |config|
   
 
 #############   Kafka Server   ##############
-  config.vm.define "kafka" do |node|
-    node.vm.box               = "generic/ubuntu2004"
-    node.vm.box_check_update  = false
-    node.vm.box_version       = "3.3.0"
-    node.vm.hostname          = "kafka.example.com"
-    node.vm.network "private_network", ip: "172.16.16.150"
-    node.vm.provision "ansible_local" do |ans|
-      ans.playbook = "kafka.yaml"
-    end
-    node.vm.provider :virtualbox do |v|
-      v.name    = "kafka"
-      v.memory  = 2048
-      v.cpus    =  1
-    end
-  end
+  # config.vm.define "kafka" do |node|
+  #   node.vm.box               = "generic/ubuntu2004"
+  #   node.vm.box_check_update  = false
+  #   node.vm.box_version       = "3.3.0"
+  #   node.vm.hostname          = "kafka.example.com"
+  #   node.vm.network "private_network", ip: "172.16.16.150"
+  #   node.vm.provision "ansible_local" do |ans|
+  #     ans.playbook = "kafka.yaml"
+  #   end
+  #   node.vm.provider :virtualbox do |v|
+  #     v.name    = "kafka"
+  #     v.memory  = 2048
+  #     v.cpus    =  1
+  #   end
+  # end
 
   
 #############   Kubernetes Master Server   #############  

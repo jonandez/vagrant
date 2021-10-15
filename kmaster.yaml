@@ -104,9 +104,13 @@
       name: "{{ item }}"
       update_cache: yes
     with_items:
-    - kubeadm=1.22.0-00
-    - kubelet=1.22.0-00
-    - kubectl=1.22.0-00
+    # - kubeadm=1.22.0-00
+    # - kubelet=1.22.0-00
+    # - kubectl=1.22.0-00
+    - kubeadm
+    - kubelet
+    - kubectl
+
 
 # Enable ssh password authentication
   - name: Enable ssh password authentication
